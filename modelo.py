@@ -1,29 +1,59 @@
 import streamlit as st
 
 # Título de la aplicación
-st.title("Generador de Modelos 3D para Cáncer de Cérvix")
+st.title("Generador de Modelos Parametrizados para Braquiterapia en Cáncer de Cérvix")
 
-# Ingreso de parámetros del tumor
-st.header("Parámetros del Tumor")
-diameter = st.number_input("Diámetro del tumor (mm)", min_value=1.0, step=0.1)
-height = st.number_input("Altura del tumor (mm)", min_value=1.0, step=0.1)
-location_x = st.number_input("Posición X (mm)", step=0.1)
-location_y = st.number_input("Posición Y (mm)", step=0.1)
-location_z = st.number_input("Posición Z (mm)", step=0.1)
+# Descripción de la aplicación
+st.markdown("""
+Esta herramienta permite crear un modelo parametrizado para planificar tratamientos de braquiterapia en cáncer de cuello uterino. 
+Podrás definir dimensiones del tumor y la posición de las agujas, generando un código Python para usar en FreeCAD.
+""")
 
-# Botón para generar código
-if st.button("Generar Código para FreeCAD"):
-    freecad_code = f"""
-import FreeCAD, Part
-doc = FreeCAD.newDocument()
-# Crear un cilindro representando el tumor
-tumor = Part.makeCylinder({diameter / 2}, {height})
-tumor.translate(FreeCAD.Vector({location_x}, {location_y}, {location_z}))
-Part.show(tumor)
-doc.recompute()
-"""
-    st.code(freecad_code, language="python")
-    st.success("Código generado exitosamente. Copie y péguelo en FreeCAD para crear el modelo.")
+# Parámetros del tumor
+st.markdown("### Configuración del Tumor")
+tumor_width = st.number_input("Ancho del tumor (mm):", min_value=10.0, max_value=200.0, value=50.0, step=1.0)
+tumor_height = st.number_input("Altura del tumor (mm):", min_value=10.0, max_value=200.0, value=50.0, step=1.0)
+tumor_depth = st.number_input("Profundidad del tumor (mm):", min_value=10.0, max_value=200.0, value=50.0, step=1.0)
 
-# Información adicional
-st.info("Este código es compatible con FreeCAD y puede ser utilizado para crear modelos personalizados basados en los parámetros ingresados.")
+# Configuración de las agujas
+st.markdown("### Configuración de Agujas de Braquiterapia")
+num_agujas = st.slider("Número de agujas:", min_value=1, max_value=10, value=3)
+agujas = []
+
+for i in range(num_agujas):
+    st.markdown(f"**Posición de la Aguja {i + 1}:**")
+    x_pos = st.number_input(f"Coordenada X (mm) de la aguja {i + 1}:", value=0.0, step=1.0, key=f"x_{i}")
+    y_pos = st.number_input(f"Coordenada Y (mm) de la aguja {i + 1}:", value=0.0, step=1.0, key=f"y_{i}")
+    z_pos = st.number_input(f"Coordenada Z (mm) de la aguja {i + 1}:", value=0.0, step=1.0, key=f"z_{i}")
+    agujas.append((x_pos, y_pos, z_pos))
+
+# Generar código Python para FreeCAD
+if st.button("Generar Código Python"):
+    code_lines = [
+        "import FreeCAD, Part",
+        "doc = FreeCAD.newDocument('Braquiterapia')",
+        f"tumor = Part.makeBox({tumor_width}, {tumor_depth}, {tumor_height})",
+        "tumor.translate(FreeCAD.Vector(0, 0, 0))",
+        "doc.addObject('Part::Feature', 'Tumor').Shape = tumor"
+    ]
+
+    for i, (x, y, z) in enumerate(agujas, start=1):
+        code_lines.extend([
+            f"aguja_{i} = Part.makeCylinder(1.0, {tumor_height})",  # Agujas con radio fijo de 1 mm
+            f"aguja_{i}.translate(FreeCAD.Vector({x}, {y}, {z}))",
+            f"doc.addObject('Part::Feature', 'Aguja_{i}').Shape = aguja_{i}"
+        ])
+
+    code_lines.append("FreeCAD.Gui.ActiveDocument.ActiveView.setAxisCross(True)")
+
+    # Mostrar el código generado
+    st.markdown("### Código Generado para FreeCAD:")
+    st.code("\n".join(code_lines), language="python")
+
+    # Opción para descargar el código como archivo
+    st.download_button(
+        label="Descargar Código Python",
+        data="\n".join(code_lines),
+        file_name="braquiterapia_freecad.py",
+        mime="text/x-python"
+    )
